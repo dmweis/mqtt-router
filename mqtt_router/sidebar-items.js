@@ -1,0 +1,1 @@
+initSidebarItems({"attr":[["async_trait",""]],"enum":[["RouterError",""]],"struct":[["Router",""]],"trait":[["RouteHandler",""]]});
