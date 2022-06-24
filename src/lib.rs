@@ -44,6 +44,9 @@ impl Router {
         }
     }
 
+    /// execute all matching handlers
+    ///
+    /// If any handler fails this method stops executing
     pub async fn handle_message(
         &mut self,
         topic: &str,
