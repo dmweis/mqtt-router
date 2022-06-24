@@ -54,6 +54,37 @@ pub trait RouteHandler: Send + Sync {
     async fn call(&mut self, topic: &str, content: &[u8]) -> Result<(), RouterError>;
 }
 
+fn topic_valid(topic: &str) -> bool {
+    let hash_count = topic.matches('#').count();
+    match hash_count {
+        0 => true,
+        1 => topic.ends_with('#'),
+        _ => false,
+    }
+}
+
+fn check_no_wildcards(topic: &str) -> bool {
+    !(topic.contains('#') || topic.contains('+'))
+}
+
+fn match_topic(key: &str, topic: &str) -> bool {
+    // Note!
+    // this will technically speaking matching something like:
+    // "foo/#/bar" with "foo/#/pub"
+    // this isn't correct but also isn't that catastrophic
+    // We could also filter out those topics on addition
+    let zip = std::iter::zip(key.split('/'), topic.split('/'));
+    for pair in zip {
+        match pair {
+            ("#", _) => return true,
+            ("+", _) => (),
+            (a, b) if a == b => (),
+            _ => return false,
+        }
+    }
+    true
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -101,5 +132,97 @@ mod tests {
             .unwrap();
         router.handle_message("home/test", &[0]).await.unwrap();
         assert_eq!(counter.load(Ordering::SeqCst), 1);
+    }
+
+    // matcher tests
+    #[test]
+    fn test_match_simple() {
+        let key = "foo/bar/baz";
+        let topic = "foo/bar/baz";
+        let matched = match_topic(key, topic);
+        assert!(matched);
+    }
+
+    #[test]
+    fn test_match_simple_with_plus() {
+        let key = "foo/bar/+";
+        let topic = "foo/bar/baz";
+        let matched = match_topic(key, topic);
+        assert!(matched);
+    }
+
+    #[test]
+    fn test_match_simple_with_wildcard_pound_sign() {
+        let key = "foo/#";
+        let topic = "foo/bar/baz";
+        let matched = match_topic(key, topic);
+        assert!(matched);
+    }
+
+    #[test]
+    fn test_match_full_wildcard() {
+        let key = "#";
+        let topic = "foo/bar/baz";
+        let matched = match_topic(key, topic);
+        assert!(matched);
+    }
+
+    #[test]
+    fn test_do_not_match_different() {
+        let key = "foo/BAZ";
+        let topic = "foo/bar/baz";
+        let matched = match_topic(key, topic);
+        assert!(!matched);
+    }
+
+    #[test]
+    fn test_do_not_match_different_plus_wildcard() {
+        let key = "+/AAAA";
+        let topic = "foo/bar/baz";
+        let matched = match_topic(key, topic);
+        assert!(!matched);
+    }
+
+    #[test]
+    fn test_topic_valid_simple() {
+        let valid = topic_valid("foo/bar/baz");
+        assert!(valid);
+    }
+
+    #[test]
+    fn test_topic_valid_simple_plus_wildcard() {
+        let valid = topic_valid("foo/+/baz");
+        assert!(valid);
+    }
+
+    #[test]
+    fn test_topic_valid_simple_hash_end() {
+        let valid = topic_valid("foo/bar/#");
+        assert!(valid);
+    }
+
+    #[test]
+    fn test_topic_not_valid_simple_hash_middle() {
+        let valid = topic_valid("foo/#/bar");
+        assert!(!valid);
+    }
+
+    // wildcards filter
+    #[test]
+    fn test_no_wildcards_simple() {
+        let valid = check_no_wildcards("foo/bar");
+        assert!(valid);
+    }
+
+    #[test]
+    fn test_wildcards_plus() {
+        let valid = check_no_wildcards("foo/+/bar");
+        assert!(!valid);
+    }
+
+    #[test]
+    fn test_wildcards_hash() {
+        let valid = check_no_wildcards("foo/#");
+        assert!(!valid);
     }
 }
