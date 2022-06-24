@@ -4,15 +4,28 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum RouterError {
-    #[error("unsupported topic")]
-    UnsupportedTopicName { topic: String },
+    #[error("invalid topic")]
+    InvalidTopicName { topic: String },
     #[error("handler error")]
     HandlerError(#[from] Box<dyn std::error::Error>),
+    #[error("trying to match a topic with wildcards")]
+    TryingToHandleTopicWithWildcards,
+}
+
+struct Route {
+    topic: String,
+    handler: Box<dyn RouteHandler>,
+}
+
+impl From<(String, Box<dyn RouteHandler>)> for Route {
+    fn from((topic, handler): (String, Box<dyn RouteHandler>)) -> Self {
+        Self { topic, handler }
+    }
 }
 
 #[derive(Default)]
 pub struct Router {
-    table: std::collections::HashMap<String, Box<dyn RouteHandler>>,
+    table: Vec<Route>,
 }
 
 impl Router {
@@ -21,12 +34,12 @@ impl Router {
         topic: &str,
         handler: Box<dyn RouteHandler>,
     ) -> std::result::Result<(), RouterError> {
-        if topic.contains('#') || topic.contains('+') {
-            Err(RouterError::UnsupportedTopicName {
+        if !topic_valid(topic) {
+            Err(RouterError::InvalidTopicName {
                 topic: topic.to_owned(),
             })
         } else {
-            self.table.insert(String::from(topic), handler);
+            self.table.push((String::from(topic), handler).into());
             Ok(())
         }
     }
@@ -36,16 +49,25 @@ impl Router {
         topic: &str,
         content: &[u8],
     ) -> Result<bool, RouterError> {
-        if let Some(handler) = self.table.get_mut(topic) {
-            handler.call(topic, content).await?;
-            Ok(true)
-        } else {
-            Ok(false)
+        if !check_no_wildcards(topic) {
+            return Err(RouterError::TryingToHandleTopicWithWildcards);
         }
+        let mut found = false;
+        for Route {
+            topic: topic_key,
+            handler,
+        } in &mut self.table
+        {
+            if match_topic(topic_key, topic) {
+                handler.call(topic, content).await?;
+                found = true;
+            }
+        }
+        Ok(found)
     }
 
     pub fn topics_for_subscription(&self) -> impl Iterator<Item = &String> {
-        self.table.keys()
+        self.table.iter().map(|Route { topic, handler: _ }| topic)
     }
 }
 
@@ -123,6 +145,28 @@ mod tests {
         router.add_handler("home/test", TestHandler::new()).unwrap();
     }
 
+    #[test]
+    fn router_detects_invalid_topic() {
+        let mut router = Router::default();
+        let error = router.add_handler("home/#/test", TestHandler::new());
+        assert!(matches!(
+            error,
+            Err(RouterError::InvalidTopicName { topic: _ })
+        ))
+    }
+
+    #[tokio::test]
+    async fn router_detects_handling_of_wildcard_topic() {
+        let mut router = Router::default();
+        router.add_handler("home/#", TestHandler::new()).unwrap();
+        let error = router.handle_message("home/#", &[0]).await;
+
+        assert!(matches!(
+            error,
+            Err(RouterError::TryingToHandleTopicWithWildcards)
+        ))
+    }
+
     #[tokio::test]
     async fn test_handler_gets_called() {
         let mut router = Router::default();
@@ -131,6 +175,28 @@ mod tests {
             .add_handler("home/test", TestHandler::with_counter(counter.clone()))
             .unwrap();
         router.handle_message("home/test", &[0]).await.unwrap();
+        assert_eq!(counter.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn test_handler_calls_plus_wildcard_matcher() {
+        let mut router = Router::default();
+        let counter = Arc::new(AtomicU32::new(0));
+        router
+            .add_handler("home/+", TestHandler::with_counter(counter.clone()))
+            .unwrap();
+        router.handle_message("home/test", &[0]).await.unwrap();
+        assert_eq!(counter.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn test_handler_calls_hash_wildcard_matcher() {
+        let mut router = Router::default();
+        let counter = Arc::new(AtomicU32::new(0));
+        router
+            .add_handler("home/+", TestHandler::with_counter(counter.clone()))
+            .unwrap();
+        router.handle_message("home/test/one", &[0]).await.unwrap();
         assert_eq!(counter.load(Ordering::SeqCst), 1);
     }
 
