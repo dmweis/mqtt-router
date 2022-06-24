@@ -7,7 +7,7 @@ pub enum RouterError {
     #[error("invalid topic")]
     InvalidTopicName { topic: String },
     #[error("handler error")]
-    HandlerError(#[from] Box<dyn std::error::Error>),
+    HandlerError(#[from] Box<dyn std::error::Error + Send + Sync + 'static>),
     #[error("trying to match a topic with wildcards")]
     TryingToHandleTopicWithWildcards,
 }
