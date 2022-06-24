@@ -309,7 +309,7 @@
     <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;invalid topic&quot;</span>)]</span>
     <span class="ident">InvalidTopicName</span> { <span class="ident">topic</span>: <span class="ident">String</span> },
     <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;handler error&quot;</span>)]</span>
-    <span class="ident">HandlerError</span>(<span class="attribute">#[<span class="ident">from</span>]</span> <span class="ident">Box</span><span class="op">&lt;</span><span class="kw">dyn</span> <span class="ident">std::error::Error</span><span class="op">&gt;</span>),
+    <span class="ident">HandlerError</span>(<span class="attribute">#[<span class="ident">from</span>]</span> <span class="ident">Box</span><span class="op">&lt;</span><span class="kw">dyn</span> <span class="ident">std::error::Error</span> <span class="op">+</span> <span class="ident">Send</span> <span class="op">+</span> <span class="ident">Sync</span> <span class="op">+</span> <span class="lifetime">&#39;static</span><span class="op">&gt;</span>),
     <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;trying to match a topic with wildcards&quot;</span>)]</span>
     <span class="ident">TryingToHandleTopicWithWildcards</span>,
 }
