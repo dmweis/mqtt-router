@@ -418,6 +418,25 @@
 <span id="413">413</span>
 <span id="414">414</span>
 <span id="415">415</span>
+<span id="416">416</span>
+<span id="417">417</span>
+<span id="418">418</span>
+<span id="419">419</span>
+<span id="420">420</span>
+<span id="421">421</span>
+<span id="422">422</span>
+<span id="423">423</span>
+<span id="424">424</span>
+<span id="425">425</span>
+<span id="426">426</span>
+<span id="427">427</span>
+<span id="428">428</span>
+<span id="429">429</span>
+<span id="430">430</span>
+<span id="431">431</span>
+<span id="432">432</span>
+<span id="433">433</span>
+<span id="434">434</span>
 </pre><pre class="rust"><code><span class="kw">pub</span> <span class="kw">use</span> <span class="ident">async_trait::async_trait</span>;
 
 <span class="kw">use</span> <span class="ident">thiserror::Error</span>;
@@ -831,6 +850,25 @@
         <span class="ident">router</span>.<span class="ident">add_handler</span>(<span class="string">&quot;bar&quot;</span>, <span class="ident">TestHandler::new</span>()).<span class="ident">unwrap</span>();
         <span class="kw">let</span> <span class="ident">res</span> <span class="op">=</span> <span class="ident">router</span>.<span class="ident">handle_message_ignore_errors</span>(<span class="string">&quot;anything&quot;</span>, <span class="kw-2">&amp;</span>[<span class="number">0</span>]).<span class="kw">await</span>;
         <span class="macro">assert!</span>(<span class="macro">matches!</span>(<span class="ident">res</span>, <span class="prelude-val">Ok</span>(<span class="bool-val">false</span>)));
+    }
+
+    <span class="attribute">#[<span class="ident">tokio::test</span>]</span>
+    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">regular_handler_detects_invalid_topics</span>() {
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">router</span> <span class="op">=</span> <span class="ident">Router::default</span>();
+        <span class="kw">let</span> <span class="ident">error</span> <span class="op">=</span> <span class="ident">router</span>.<span class="ident">handle_message</span>(<span class="string">&quot;#&quot;</span>, <span class="kw-2">&amp;</span>[<span class="number">0</span>]).<span class="kw">await</span>;
+        <span class="macro">assert!</span>(<span class="macro">matches!</span>(
+            <span class="ident">error</span>,
+            <span class="prelude-val">Err</span>(<span class="ident">RouterError::TryingToHandleTopicWithWildcards</span>)
+        ));
+    }
+
+    <span class="attribute">#[<span class="ident">tokio::test</span>]</span>
+    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">error_ignoring_handler_detects_invalid_topics</span>() {
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">router</span> <span class="op">=</span> <span class="ident">Router::default</span>();
+        <span class="kw">let</span> <span class="ident">error</span> <span class="op">=</span> <span class="ident">router</span>.<span class="ident">handle_message_ignore_errors</span>(<span class="string">&quot;#&quot;</span>, <span class="kw-2">&amp;</span>[<span class="number">0</span>]).<span class="kw">await</span>;
+        <span class="macro">assert!</span>(
+            <span class="macro">matches!</span>(<span class="ident">error</span>, <span class="prelude-val">Err</span>(<span class="ident">list</span>) <span class="kw">if</span> <span class="ident">list</span>.<span class="ident">len</span>() <span class="op">==</span> <span class="number">1</span> <span class="op">&amp;&amp;</span> <span class="macro">matches!</span>(<span class="ident">list</span>[<span class="number">0</span>], <span class="ident">RouterError::TryingToHandleTopicWithWildcards</span>))
+        );
     }
 }
 </code></pre></div>
