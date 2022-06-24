@@ -11,4 +11,5 @@ async-trait = "0.1"
 
 
 [dev-dependencies]
-tokio = { version = "*", features = ["full"] }
+tokio = { version = "1", features = ["full"] }
+rumqttc = "0.13.0"
