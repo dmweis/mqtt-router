@@ -69,6 +69,36 @@ impl Router {
         Ok(found)
     }
 
+    /// execute all matching handlers
+    pub async fn handle_message_ignore_errors(
+        &mut self,
+        topic: &str,
+        content: &[u8],
+    ) -> Result<bool, Vec<RouterError>> {
+        if !check_no_wildcards(topic) {
+            return Err(vec![RouterError::TryingToHandleTopicWithWildcards]);
+        }
+        let mut found = false;
+        let mut errors = vec![];
+        for Route {
+            topic: topic_key,
+            handler,
+        } in &mut self.table
+        {
+            if match_topic(topic_key, topic) {
+                found = true;
+                if let Err(e) = handler.call(topic, content).await {
+                    errors.push(e);
+                }
+            }
+        }
+        if !errors.is_empty() {
+            Err(errors)
+        } else {
+            Ok(found)
+        }
+    }
+
     pub fn topics_for_subscription(&self) -> impl Iterator<Item = &String> {
         self.table.iter().map(|Route { topic, handler: _ }| topic)
     }
@@ -293,5 +323,54 @@ mod tests {
     fn test_wildcards_hash() {
         let valid = check_no_wildcards("foo/#");
         assert!(!valid);
+    }
+
+    // handler error tests
+
+    #[derive(Debug)]
+    pub struct ErroringHandler {}
+
+    impl ErroringHandler {
+        pub fn new() -> Box<Self> {
+            Box::new(Self {})
+        }
+    }
+
+    #[async_trait]
+    impl RouteHandler for ErroringHandler {
+        async fn call(&mut self, _topic: &str, _content: &[u8]) -> Result<(), RouterError> {
+            Err(Box::<dyn std::error::Error + Send + Sync>::from("oh no".to_owned()).into())
+        }
+    }
+
+    #[tokio::test]
+    async fn test_error_collection() {
+        let mut router = Router::default();
+        router.add_handler("#", ErroringHandler::new()).unwrap();
+        router.add_handler("#", ErroringHandler::new()).unwrap();
+        let counter = Arc::new(AtomicU32::new(0));
+        router
+            .add_handler("#", TestHandler::with_counter(counter.clone()))
+            .unwrap();
+        let errors = router.handle_message_ignore_errors("anything", &[0]).await;
+        // found two errors
+        assert!(matches!(errors, Err(a) if a.len() == 2));
+        // last handler was called
+        assert_eq!(counter.load(Ordering::SeqCst), 1)
+    }
+
+    #[tokio::test]
+    async fn test_error_stop_handler_execution() {
+        let mut router = Router::default();
+        router.add_handler("#", ErroringHandler::new()).unwrap();
+        let counter = Arc::new(AtomicU32::new(0));
+        router
+            .add_handler("#", TestHandler::with_counter(counter.clone()))
+            .unwrap();
+        let res = router.handle_message("anything", &[0]).await;
+        // found two errors
+        assert!(matches!(res, Err(_)));
+        // last handler was called
+        assert_eq!(counter.load(Ordering::SeqCst), 0)
     }
 }
