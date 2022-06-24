@@ -394,4 +394,22 @@ mod tests {
         // last handler was called
         assert_eq!(counter.load(Ordering::SeqCst), 0)
     }
+
+    #[tokio::test]
+    async fn test_error_returns_ok_with_no_errors() {
+        let mut router = Router::default();
+        router.add_handler("#", TestHandler::new()).unwrap();
+        router.add_handler("#", TestHandler::new()).unwrap();
+        let res = router.handle_message_ignore_errors("anything", &[0]).await;
+        assert!(matches!(res, Ok(true)));
+    }
+
+    #[tokio::test]
+    async fn handler_returns_false_if_no_matches_found() {
+        let mut router = Router::default();
+        router.add_handler("foo", TestHandler::new()).unwrap();
+        router.add_handler("bar", TestHandler::new()).unwrap();
+        let res = router.handle_message_ignore_errors("anything", &[0]).await;
+        assert!(matches!(res, Ok(false)));
+    }
 }
