@@ -1,0 +1,14 @@
+[package]
+name = "mqtt-router"
+version = "0.1.0"
+authors = ["David Weis <dweis7@gmail.com>"]
+edition = "2021"
+publish = false
+
+[dependencies]
+thiserror = "1.0"
+async-trait = "0.1"
+
+
+[dev-dependencies]
+tokio = { version = "*", features = ["full"] }
