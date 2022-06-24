@@ -179,6 +179,21 @@ mod tests {
     }
 
     #[test]
+    fn all_topics_are_listed() {
+        let mut router = Router::default();
+        router.add_handler("a", TestHandler::new()).unwrap();
+        router.add_handler("b", TestHandler::new()).unwrap();
+        router.add_handler("c/#", TestHandler::new()).unwrap();
+        let topics: std::collections::HashSet<String> =
+            router.topics_for_subscription().cloned().collect();
+        let expected: std::collections::HashSet<String> = ["a", "b", "c/#"]
+            .into_iter()
+            .map(|a| a.to_owned())
+            .collect();
+        assert_eq!(topics, expected);
+    }
+
+    #[test]
     fn router_detects_invalid_topic() {
         let mut router = Router::default();
         let error = router.add_handler("home/#/test", TestHandler::new());
@@ -303,6 +318,12 @@ mod tests {
     #[test]
     fn test_topic_not_valid_simple_hash_middle() {
         let valid = topic_valid("foo/#/bar");
+        assert!(!valid);
+    }
+
+    #[test]
+    fn test_topic_not_valid_multiple_hashes() {
+        let valid = topic_valid("foo/#/#/bar");
         assert!(!valid);
     }
 
