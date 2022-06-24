@@ -412,4 +412,23 @@ mod tests {
         let res = router.handle_message_ignore_errors("anything", &[0]).await;
         assert!(matches!(res, Ok(false)));
     }
+
+    #[tokio::test]
+    async fn regular_handler_detects_invalid_topics() {
+        let mut router = Router::default();
+        let error = router.handle_message("#", &[0]).await;
+        assert!(matches!(
+            error,
+            Err(RouterError::TryingToHandleTopicWithWildcards)
+        ));
+    }
+
+    #[tokio::test]
+    async fn error_ignoring_handler_detects_invalid_topics() {
+        let mut router = Router::default();
+        let error = router.handle_message_ignore_errors("#", &[0]).await;
+        assert!(
+            matches!(error, Err(list) if list.len() == 1 && matches!(list[0], RouterError::TryingToHandleTopicWithWildcards))
+        );
+    }
 }
