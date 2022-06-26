@@ -1,5 +1,6 @@
 pub use async_trait::async_trait;
 
+use itertools::{EitherOrBoth, Itertools};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -128,12 +129,13 @@ fn match_topic(key: &str, topic: &str) -> bool {
     // "foo/#/bar" with "foo/#/pub"
     // this isn't correct but also isn't that catastrophic
     // We could also filter out those topics on addition
-    let zip = std::iter::zip(key.split('/'), topic.split('/'));
+    let zip = key.split('/').zip_longest(topic.split('/'));
     for pair in zip {
         match pair {
-            ("#", _) => return true,
-            ("+", _) => (),
-            (a, b) if a == b => (),
+            EitherOrBoth::Left(_) | EitherOrBoth::Right(_) => return false,
+            EitherOrBoth::Both("#", _) => return true,
+            EitherOrBoth::Both("+", _) => (),
+            EitherOrBoth::Both(a, b) if a == b => (),
             _ => return false,
         }
     }
@@ -242,7 +244,7 @@ mod tests {
         let mut router = Router::default();
         let counter = Arc::new(AtomicU32::new(0));
         router
-            .add_handler("home/+", TestHandler::with_counter(counter.clone()))
+            .add_handler("home/#", TestHandler::with_counter(counter.clone()))
             .unwrap();
         router.handle_message("home/test/one", &[0]).await.unwrap();
         assert_eq!(counter.load(Ordering::SeqCst), 1);
@@ -292,6 +294,22 @@ mod tests {
     #[test]
     fn test_do_not_match_different_plus_wildcard() {
         let key = "+/AAAA";
+        let topic = "foo/bar/baz";
+        let matched = match_topic(key, topic);
+        assert!(!matched);
+    }
+
+    #[test]
+    fn do_not_match_longer_topics() {
+        let key = "foo/bar";
+        let topic = "foo/bar/baz";
+        let matched = match_topic(key, topic);
+        assert!(!matched);
+    }
+
+    #[test]
+    fn do_not_match_shorter_topics() {
+        let key = "foo/bar";
         let topic = "foo/bar/baz";
         let matched = match_topic(key, topic);
         assert!(!matched);
