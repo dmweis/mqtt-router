@@ -437,8 +437,27 @@
 <span id="432">432</span>
 <span id="433">433</span>
 <span id="434">434</span>
+<span id="435">435</span>
+<span id="436">436</span>
+<span id="437">437</span>
+<span id="438">438</span>
+<span id="439">439</span>
+<span id="440">440</span>
+<span id="441">441</span>
+<span id="442">442</span>
+<span id="443">443</span>
+<span id="444">444</span>
+<span id="445">445</span>
+<span id="446">446</span>
+<span id="447">447</span>
+<span id="448">448</span>
+<span id="449">449</span>
+<span id="450">450</span>
+<span id="451">451</span>
+<span id="452">452</span>
 </pre><pre class="rust"><code><span class="kw">pub</span> <span class="kw">use</span> <span class="ident">async_trait::async_trait</span>;
 
+<span class="kw">use</span> <span class="ident">itertools</span>::{<span class="ident">EitherOrBoth</span>, <span class="ident">Itertools</span>};
 <span class="kw">use</span> <span class="ident">thiserror::Error</span>;
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Error</span>, <span class="ident">Debug</span>)]</span>
@@ -567,12 +586,13 @@
     <span class="comment">// &quot;foo/#/bar&quot; with &quot;foo/#/pub&quot;</span>
     <span class="comment">// this isn&#39;t correct but also isn&#39;t that catastrophic</span>
     <span class="comment">// We could also filter out those topics on addition</span>
-    <span class="kw">let</span> <span class="ident">zip</span> <span class="op">=</span> <span class="ident">std::iter::zip</span>(<span class="ident">key</span>.<span class="ident">split</span>(<span class="string">&#39;/&#39;</span>), <span class="ident">topic</span>.<span class="ident">split</span>(<span class="string">&#39;/&#39;</span>));
+    <span class="kw">let</span> <span class="ident">zip</span> <span class="op">=</span> <span class="ident">key</span>.<span class="ident">split</span>(<span class="string">&#39;/&#39;</span>).<span class="ident">zip_longest</span>(<span class="ident">topic</span>.<span class="ident">split</span>(<span class="string">&#39;/&#39;</span>));
     <span class="kw">for</span> <span class="ident">pair</span> <span class="kw">in</span> <span class="ident">zip</span> {
         <span class="kw">match</span> <span class="ident">pair</span> {
-            (<span class="string">&quot;#&quot;</span>, <span class="kw">_</span>) =&gt; <span class="kw">return</span> <span class="bool-val">true</span>,
-            (<span class="string">&quot;+&quot;</span>, <span class="kw">_</span>) =&gt; (),
-            (<span class="ident">a</span>, <span class="ident">b</span>) <span class="kw">if</span> <span class="ident">a</span> <span class="op">==</span> <span class="ident">b</span> =&gt; (),
+            <span class="ident">EitherOrBoth::Left</span>(<span class="kw">_</span>) <span class="op">|</span> <span class="ident">EitherOrBoth::Right</span>(<span class="kw">_</span>) =&gt; <span class="kw">return</span> <span class="bool-val">false</span>,
+            <span class="ident">EitherOrBoth::Both</span>(<span class="string">&quot;#&quot;</span>, <span class="kw">_</span>) =&gt; <span class="kw">return</span> <span class="bool-val">true</span>,
+            <span class="ident">EitherOrBoth::Both</span>(<span class="string">&quot;+&quot;</span>, <span class="kw">_</span>) =&gt; (),
+            <span class="ident">EitherOrBoth::Both</span>(<span class="ident">a</span>, <span class="ident">b</span>) <span class="kw">if</span> <span class="ident">a</span> <span class="op">==</span> <span class="ident">b</span> =&gt; (),
             <span class="kw">_</span> =&gt; <span class="kw">return</span> <span class="bool-val">false</span>,
         }
     }
@@ -681,7 +701,7 @@
         <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">router</span> <span class="op">=</span> <span class="ident">Router::default</span>();
         <span class="kw">let</span> <span class="ident">counter</span> <span class="op">=</span> <span class="ident">Arc::new</span>(<span class="ident">AtomicU32::new</span>(<span class="number">0</span>));
         <span class="ident">router</span>
-            .<span class="ident">add_handler</span>(<span class="string">&quot;home/+&quot;</span>, <span class="ident">TestHandler::with_counter</span>(<span class="ident">counter</span>.<span class="ident">clone</span>()))
+            .<span class="ident">add_handler</span>(<span class="string">&quot;home/#&quot;</span>, <span class="ident">TestHandler::with_counter</span>(<span class="ident">counter</span>.<span class="ident">clone</span>()))
             .<span class="ident">unwrap</span>();
         <span class="ident">router</span>.<span class="ident">handle_message</span>(<span class="string">&quot;home/test/one&quot;</span>, <span class="kw-2">&amp;</span>[<span class="number">0</span>]).<span class="kw">await</span>.<span class="ident">unwrap</span>();
         <span class="macro">assert_eq!</span>(<span class="ident">counter</span>.<span class="ident">load</span>(<span class="ident">Ordering::SeqCst</span>), <span class="number">1</span>);
@@ -731,6 +751,22 @@
     <span class="attribute">#[<span class="ident">test</span>]</span>
     <span class="kw">fn</span> <span class="ident">test_do_not_match_different_plus_wildcard</span>() {
         <span class="kw">let</span> <span class="ident">key</span> <span class="op">=</span> <span class="string">&quot;+/AAAA&quot;</span>;
+        <span class="kw">let</span> <span class="ident">topic</span> <span class="op">=</span> <span class="string">&quot;foo/bar/baz&quot;</span>;
+        <span class="kw">let</span> <span class="ident">matched</span> <span class="op">=</span> <span class="ident">match_topic</span>(<span class="ident">key</span>, <span class="ident">topic</span>);
+        <span class="macro">assert!</span>(<span class="op">!</span><span class="ident">matched</span>);
+    }
+
+    <span class="attribute">#[<span class="ident">test</span>]</span>
+    <span class="kw">fn</span> <span class="ident">do_not_match_longer_topics</span>() {
+        <span class="kw">let</span> <span class="ident">key</span> <span class="op">=</span> <span class="string">&quot;foo/bar&quot;</span>;
+        <span class="kw">let</span> <span class="ident">topic</span> <span class="op">=</span> <span class="string">&quot;foo/bar/baz&quot;</span>;
+        <span class="kw">let</span> <span class="ident">matched</span> <span class="op">=</span> <span class="ident">match_topic</span>(<span class="ident">key</span>, <span class="ident">topic</span>);
+        <span class="macro">assert!</span>(<span class="op">!</span><span class="ident">matched</span>);
+    }
+
+    <span class="attribute">#[<span class="ident">test</span>]</span>
+    <span class="kw">fn</span> <span class="ident">do_not_match_shorter_topics</span>() {
+        <span class="kw">let</span> <span class="ident">key</span> <span class="op">=</span> <span class="string">&quot;foo/bar&quot;</span>;
         <span class="kw">let</span> <span class="ident">topic</span> <span class="op">=</span> <span class="string">&quot;foo/bar/baz&quot;</span>;
         <span class="kw">let</span> <span class="ident">matched</span> <span class="op">=</span> <span class="ident">match_topic</span>(<span class="ident">key</span>, <span class="ident">topic</span>);
         <span class="macro">assert!</span>(<span class="op">!</span><span class="ident">matched</span>);
