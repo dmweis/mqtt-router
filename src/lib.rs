@@ -5,10 +5,13 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum RouterError {
+    /// Topic isn't valid based on MQTT rules
     #[error("invalid topic")]
     InvalidTopicName { topic: String },
+    /// Handler encountered and error while routing messages
     #[error("handler error")]
     HandlerError(#[from] Box<dyn std::error::Error + Send + Sync + 'static>),
+    /// Topic containes wildcards which is not legal based on MQTT spec
     #[error("trying to match a topic with wildcards")]
     TryingToHandleTopicWithWildcards,
 }
@@ -24,12 +27,14 @@ impl From<(String, Box<dyn RouteHandler>)> for Route {
     }
 }
 
+/// Router with a set of handlers
 #[derive(Default)]
 pub struct Router {
     table: Vec<Route>,
 }
 
 impl Router {
+    /// Add new handler for a topic key
     pub fn add_handler(
         &mut self,
         topic: &str,
@@ -45,7 +50,7 @@ impl Router {
         }
     }
 
-    /// execute all matching handlers
+    /// Execute all matching handlers
     ///
     /// If any handler fails this method stops executing
     pub async fn handle_message(
@@ -70,7 +75,10 @@ impl Router {
         Ok(found)
     }
 
-    /// execute all matching handlers
+    /// Execute all matching handlers
+    ///
+    /// Execution continues if an error is encountered
+    /// and Result::Err is returned at the end with all collected errors.
     pub async fn handle_message_ignore_errors(
         &mut self,
         topic: &str,
@@ -105,6 +113,7 @@ impl Router {
     }
 }
 
+/// Async handler for a route
 #[async_trait]
 pub trait RouteHandler: Send + Sync {
     async fn call(&mut self, topic: &str, content: &[u8]) -> Result<(), RouterError>;
@@ -123,12 +132,17 @@ fn check_no_wildcards(topic: &str) -> bool {
     !(topic.contains('#') || topic.contains('+'))
 }
 
+/// Check if topic matches key
+///
+/// # Arguments
+///
+/// * `key` - Topic lookup key
+/// * `topic` - Topic to compare against key
+///
+/// Note that this method doesn't itself filter out incorrect topics or keys
+/// such as topics that contain wildcards or keys that do container a # wildcard in the middle
+/// It should only be used with other verification methdos
 fn match_topic(key: &str, topic: &str) -> bool {
-    // Note!
-    // this will technically speaking matching something like:
-    // "foo/#/bar" with "foo/#/pub"
-    // this isn't correct but also isn't that catastrophic
-    // We could also filter out those topics on addition
     let zip = key.split('/').zip_longest(topic.split('/'));
     for pair in zip {
         match pair {
