@@ -11,5 +11,5 @@ itertools = "0.10.3"
 thiserror = "1.0"
 
 [dev-dependencies]
-rumqttc = "0.13.0"
+rumqttc = "0.20.0"
 tokio = {version = "1", features = ["full"]}
