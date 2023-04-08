@@ -1,6 +1,7 @@
 pub use async_trait::async_trait;
 
 use itertools::{EitherOrBoth, Itertools};
+use std::future::Future;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -16,24 +17,24 @@ pub enum RouterError {
     TryingToHandleTopicWithWildcards,
 }
 
-struct Route {
+struct Route<'a> {
     topic: String,
-    handler: Box<dyn RouteHandler>,
+    handler: Box<dyn RouteHandler + 'a>,
 }
 
-impl From<(String, Box<dyn RouteHandler>)> for Route {
-    fn from((topic, handler): (String, Box<dyn RouteHandler>)) -> Self {
+impl<'a> From<(String, Box<dyn RouteHandler + 'a>)> for Route<'a> {
+    fn from((topic, handler): (String, Box<dyn RouteHandler + 'a>)) -> Self {
         Self { topic, handler }
     }
 }
 
 /// Router with a set of handlers
 #[derive(Default)]
-pub struct Router {
-    table: Vec<Route>,
+pub struct Router<'a> {
+    table: Vec<Route<'a>>,
 }
 
-impl Router {
+impl<'a> Router<'a> {
     /// Add new handler for a topic key
     pub fn add_handler(
         &mut self,
@@ -46,6 +47,33 @@ impl Router {
             })
         } else {
             self.table.push((String::from(topic), handler).into());
+            Ok(())
+        }
+    }
+
+    pub fn add_closure_handler<F, Fut>(
+        &mut self,
+        topic: &str,
+        closure: F,
+    ) -> std::result::Result<(), RouterError>
+    where
+        F: Fn(&str, &[u8]) -> Fut + Send + Sync + 'a,
+        Fut: Future<Output = Result<(), RouterError>> + Send + Sync + 'a,
+    {
+        // f(1, 2).await;
+
+        let closure = ClosureRouteHanlder { closure };
+
+        if !topic_valid(topic) {
+            Err(RouterError::InvalidTopicName {
+                topic: topic.to_owned(),
+            })
+        } else {
+            let route = Route {
+                topic: String::from(topic),
+                handler: Box::new(closure),
+            };
+            self.table.push(route);
             Ok(())
         }
     }
@@ -117,6 +145,25 @@ impl Router {
 #[async_trait]
 pub trait RouteHandler: Send + Sync {
     async fn call(&mut self, topic: &str, content: &[u8]) -> Result<(), RouterError>;
+}
+
+struct ClosureRouteHanlder<F, Fut>
+where
+    F: Fn(&str, &[u8]) -> Fut + Send + Sync,
+    Fut: Future<Output = Result<(), RouterError>> + Send + Sync,
+{
+    closure: F,
+}
+
+#[async_trait]
+impl<F, Fut> RouteHandler for ClosureRouteHanlder<F, Fut>
+where
+    F: Fn(&str, &[u8]) -> Fut + Send + Sync,
+    Fut: Future<Output = Result<(), RouterError>> + Send + Sync,
+{
+    async fn call(&mut self, topic: &str, content: &[u8]) -> Result<(), RouterError> {
+        (self.closure)(topic, content).await
+    }
 }
 
 fn topic_valid(topic: &str) -> bool {
@@ -462,5 +509,15 @@ mod tests {
         assert!(
             matches!(error, Err(list) if list.len() == 1 && matches!(list[0], RouterError::TryingToHandleTopicWithWildcards))
         );
+    }
+
+    #[tokio::test]
+    async fn router_takes_async_closures() {
+        let mut router = Router::default();
+        router
+            .add_closure_handler("foo", |_, _| async { Ok(()) })
+            .unwrap();
+        let res = router.handle_message_ignore_errors("foo", &[0]).await;
+        assert!(matches!(res, Ok(true)));
     }
 }
