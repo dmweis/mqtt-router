@@ -1,3 +1,4 @@
+use anyhow::Context;
 use mqtt_router::{async_trait, RouteHandler, Router, RouterError};
 use rumqttc::{AsyncClient, ConnAck, Event, Incoming, MqttOptions, Publish, QoS, SubscribeFilter};
 use std::time::Duration;
@@ -14,7 +15,7 @@ impl ExampleHandler {
 #[async_trait]
 impl RouteHandler for ExampleHandler {
     async fn call(&mut self, topic: &str, content: &[u8]) -> Result<(), RouterError> {
-        let text = std::str::from_utf8(content).unwrap_or("N/A");
+        let text = std::str::from_utf8(content).context("Wrapping an anyhow error")?;
         println!("{topic} -> {text:?}");
         Ok(())
     }

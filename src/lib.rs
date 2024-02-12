@@ -10,8 +10,8 @@ pub enum RouterError {
     #[error("invalid topic")]
     InvalidTopicName { topic: String },
     /// Handler encountered and error while routing messages
-    #[error("handler error")]
-    HandlerError(#[from] Box<dyn std::error::Error + Send + Sync + 'static>),
+    #[error(transparent)]
+    HandlerError(#[from] anyhow::Error),
     /// Topic containes wildcards which is not legal based on MQTT spec
     #[error("trying to match a topic with wildcards")]
     TryingToHandleTopicWithWildcards,
@@ -439,7 +439,7 @@ mod tests {
     #[async_trait]
     impl RouteHandler for ErroringHandler {
         async fn call(&mut self, _topic: &str, _content: &[u8]) -> Result<(), RouterError> {
-            Err(Box::<dyn std::error::Error + Send + Sync>::from("oh no".to_owned()).into())
+            Err(anyhow::anyhow!("testing error").into())
         }
     }
 
@@ -469,7 +469,7 @@ mod tests {
             .unwrap();
         let res = router.handle_message("anything", &[0]).await;
         // found two errors
-        assert!(matches!(res, Err(_)));
+        assert!(res.is_err());
         // last handler was called
         assert_eq!(counter.load(Ordering::SeqCst), 0)
     }
