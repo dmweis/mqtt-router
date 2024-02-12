@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"attr":["async_trait"],"enum":["RouterError"],"struct":["Router"],"trait":["RouteHandler"]};
