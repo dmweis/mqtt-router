@@ -58,7 +58,7 @@ impl<'a> Router<'a> {
     ) -> std::result::Result<(), RouterError>
     where
         F: Fn(&str, &[u8]) -> Fut + Send + Sync + 'a,
-        Fut: Future<Output = Result<(), RouterError>> + Send + Sync + 'a,
+        Fut: Future<Output = Result<(), anyhow::Error>> + Send + Sync + 'a,
     {
         // f(1, 2).await;
 
@@ -125,7 +125,7 @@ impl<'a> Router<'a> {
             if match_topic(topic_key, topic) {
                 found = true;
                 if let Err(e) = handler.call(topic, content).await {
-                    errors.push(e);
+                    errors.push(e.into());
                 }
             }
         }
@@ -144,13 +144,13 @@ impl<'a> Router<'a> {
 /// Async handler for a route
 #[async_trait]
 pub trait RouteHandler: Send + Sync {
-    async fn call(&mut self, topic: &str, content: &[u8]) -> Result<(), RouterError>;
+    async fn call(&mut self, topic: &str, content: &[u8]) -> Result<(), anyhow::Error>;
 }
 
 struct ClosureRouteHanlder<F, Fut>
 where
     F: Fn(&str, &[u8]) -> Fut + Send + Sync,
-    Fut: Future<Output = Result<(), RouterError>> + Send + Sync,
+    Fut: Future<Output = Result<(), anyhow::Error>> + Send + Sync,
 {
     closure: F,
 }
@@ -159,9 +159,9 @@ where
 impl<F, Fut> RouteHandler for ClosureRouteHanlder<F, Fut>
 where
     F: Fn(&str, &[u8]) -> Fut + Send + Sync,
-    Fut: Future<Output = Result<(), RouterError>> + Send + Sync,
+    Fut: Future<Output = Result<(), anyhow::Error>> + Send + Sync,
 {
-    async fn call(&mut self, topic: &str, content: &[u8]) -> Result<(), RouterError> {
+    async fn call(&mut self, topic: &str, content: &[u8]) -> Result<(), anyhow::Error> {
         (self.closure)(topic, content).await
     }
 }
@@ -229,7 +229,7 @@ mod tests {
 
     #[async_trait]
     impl RouteHandler for TestHandler {
-        async fn call(&mut self, _topic: &str, _content: &[u8]) -> Result<(), RouterError> {
+        async fn call(&mut self, _topic: &str, _content: &[u8]) -> Result<(), anyhow::Error> {
             self.call_counter.fetch_add(1, Ordering::SeqCst);
             Ok(())
         }
@@ -438,8 +438,8 @@ mod tests {
 
     #[async_trait]
     impl RouteHandler for ErroringHandler {
-        async fn call(&mut self, _topic: &str, _content: &[u8]) -> Result<(), RouterError> {
-            Err(anyhow::anyhow!("testing error").into())
+        async fn call(&mut self, _topic: &str, _content: &[u8]) -> Result<(), anyhow::Error> {
+            Err(anyhow::anyhow!("testing error"))
         }
     }
 

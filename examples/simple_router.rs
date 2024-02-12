@@ -1,4 +1,4 @@
-use mqtt_router::{async_trait, RouteHandler, Router, RouterError};
+use mqtt_router::{async_trait, RouteHandler, Router};
 
 pub struct ExampleHandler {}
 
@@ -10,7 +10,7 @@ impl ExampleHandler {
 
 #[async_trait]
 impl RouteHandler for ExampleHandler {
-    async fn call(&mut self, topic: &str, _content: &[u8]) -> Result<(), RouterError> {
+    async fn call(&mut self, topic: &str, _content: &[u8]) -> Result<(), anyhow::Error> {
         println!("Handling mqtt message for {topic}");
         Ok(())
     }

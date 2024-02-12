@@ -3,7 +3,7 @@ authors = ["David Weis <dweis7@gmail.com>"]
 edition = "2021"
 name = "mqtt-router"
 publish = false
-version = "0.2.1"
+version = "0.3.0"
 
 [dependencies]
 async-trait = "0.1"
